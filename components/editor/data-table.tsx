@@ -178,7 +178,7 @@ export function DataTable({
         className="flex border-b border-border bg-card"
         style={{ paddingRight: scrollbarWidth > 0 ? `${scrollbarWidth}px` : undefined }}
       >
-        <div className="w-16 shrink-0 border-r border-border px-3 py-2">
+        <div className="flex w-16 shrink-0 flex-col items-center justify-center border-r border-border px-3 py-2">
           <div className="text-xs font-medium text-muted-foreground">
             #
           </div>
@@ -219,7 +219,7 @@ export function DataTable({
                 }}
                 title="Click to select · Double-click to open in Focus View"
               >
-                <div className="flex w-16 shrink-0 items-center border-r border-border px-3 py-3">
+                <div className="flex w-16 shrink-0 items-center justify-center border-r border-border px-3 py-3">
                   <span className="text-sm text-muted-foreground">
                     {row._index}
                   </span>
