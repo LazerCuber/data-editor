@@ -1,6 +1,6 @@
 "use client";
 
-import { Database, FileJson, Upload, Download, ChevronDown, FileSpreadsheet, Table2, FileCode, LayoutGrid } from "lucide-react";
+import { Database, FileJson, Upload, Download, ChevronDown, FileSpreadsheet, Table2, FileCode, LayoutGrid, Cloud, TableProperties } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,8 @@ interface HeaderProps {
   onExportCSV: () => void;
   viewMode: "table" | "raw";
   onViewModeChange: (mode: "table" | "raw") => void;
+  activeTab: "editor" | "projects";
+  onTabChange: (tab: "editor" | "projects") => void;
 }
 
 const getFileIcon = (type: FileType) => {
@@ -46,16 +48,34 @@ export function Header({
   onExportCSV,
   viewMode,
   onViewModeChange,
+  activeTab,
+  onTabChange,
 }: HeaderProps) {
   return (
     <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <Database className="h-5 w-5 text-primary" />
-          <span className="text-sm font-medium text-muted-foreground">
-            Datasets:
+          <span className="text-lg font-semibold text-foreground">
+            Data Editor
           </span>
         </div>
+        
+        <ToggleGroup
+          type="single"
+          value={activeTab}
+          onValueChange={(value) => value && onTabChange(value as "editor" | "projects")}
+          className="border border-border rounded-md"
+        >
+          <ToggleGroupItem value="editor" aria-label="Editor" className="gap-1.5 px-3">
+            <TableProperties className="h-4 w-4" />
+            <span className="hidden sm:inline">Editor</span>
+          </ToggleGroupItem>
+          <ToggleGroupItem value="projects" aria-label="Projects" className="gap-1.5 px-3">
+            <Cloud className="h-4 w-4" />
+            <span className="hidden sm:inline">Projects</span>
+          </ToggleGroupItem>
+        </ToggleGroup>
         {fileName ? (
           <div className="flex items-center gap-2">
             {getFileIcon(fileType)}
