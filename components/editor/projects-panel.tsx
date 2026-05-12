@@ -99,6 +99,7 @@ export function ProjectsPanel({
 
     setSaving(true);
     try {
+      console.log("[v0] Saving to cloud:", currentFileName, "size:", currentContent.length);
       const response = await fetch("/api/projects/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -109,12 +110,19 @@ export function ProjectsPanel({
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to save");
+      const responseText = await response.text();
+      console.log("[v0] Upload response status:", response.status, "body:", responseText);
 
+      if (!response.ok) {
+        const errorData = JSON.parse(responseText);
+        throw new Error(errorData.error || "Failed to save");
+      }
+
+      console.log("[v0] Upload successful");
       // Refresh the projects list
       mutate("/api/projects");
     } catch (err) {
-      console.error("Failed to save project:", err);
+      console.error("[v0] Failed to save project:", err);
     } finally {
       setSaving(false);
     }
