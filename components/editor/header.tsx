@@ -1,6 +1,7 @@
 "use client";
 
-import { Database, FileJson, Upload, Download, ChevronDown } from "lucide-react";
+import { Database, FileJson, Upload, Download, ChevronDown, FileSpreadsheet, Table2, FileCode, LayoutGrid } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,16 +9,31 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { FileType } from "@/lib/types";
 
 interface HeaderProps {
   fileName: string;
   totalRows: number;
-  fileType: "json" | "jsonl";
+  fileType: FileType;
   hasChanges: boolean;
   onUpload: () => void;
   onExportJSON: () => void;
   onExportJSONL: () => void;
+  onExportCSV: () => void;
+  viewMode: "table" | "raw";
+  onViewModeChange: (mode: "table" | "raw") => void;
 }
+
+const getFileIcon = (type: FileType) => {
+  switch (type) {
+    case "csv":
+      return <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />;
+    case "parquet":
+      return <Table2 className="h-4 w-4 text-muted-foreground" />;
+    default:
+      return <FileJson className="h-4 w-4 text-muted-foreground" />;
+  }
+};
 
 export function Header({
   fileName,
@@ -27,6 +43,9 @@ export function Header({
   onUpload,
   onExportJSON,
   onExportJSONL,
+  onExportCSV,
+  viewMode,
+  onViewModeChange,
 }: HeaderProps) {
   return (
     <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
@@ -39,7 +58,7 @@ export function Header({
         </div>
         {fileName ? (
           <div className="flex items-center gap-2">
-            <FileJson className="h-4 w-4 text-muted-foreground" />
+            {getFileIcon(fileType)}
             <span className="font-semibold text-foreground">{fileName}</span>
             <span className="rounded bg-secondary px-2 py-0.5 text-xs text-muted-foreground">
               {fileType.toUpperCase()}
@@ -57,9 +76,26 @@ export function Header({
 
       <div className="flex items-center gap-3">
         {totalRows > 0 && (
-          <span className="text-sm text-muted-foreground">
-            {totalRows.toLocaleString()} rows
-          </span>
+          <>
+            <span className="text-sm text-muted-foreground">
+              {totalRows.toLocaleString()} rows
+            </span>
+            <ToggleGroup
+              type="single"
+              value={viewMode}
+              onValueChange={(value) => value && onViewModeChange(value as "table" | "raw")}
+              className="border border-border rounded-md"
+            >
+              <ToggleGroupItem value="table" aria-label="Table view" className="gap-1.5 px-3">
+                <LayoutGrid className="h-4 w-4" />
+                <span className="hidden sm:inline">Table</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="raw" aria-label="Raw view" className="gap-1.5 px-3">
+                <FileCode className="h-4 w-4" />
+                <span className="hidden sm:inline">Raw</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </>
         )}
         
         <Button
@@ -89,6 +125,10 @@ export function Header({
               <DropdownMenuItem onClick={onExportJSON}>
                 <FileJson className="mr-2 h-4 w-4" />
                 Export as JSON
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onExportCSV}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Export as CSV
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

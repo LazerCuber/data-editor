@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useMemo, useCallback } from "react";
+import { useRef, useMemo, useCallback, useState, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronLeft, ChevronRight, Search, Rows3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ export function DataTable({
   modifiedRows,
 }: DataTableProps) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const [scrollbarWidth, setScrollbarWidth] = useState(0);
 
   const activeCols = useMemo(
     () => columns.filter((c) => visibleColumns.has(c)),
@@ -68,6 +69,31 @@ export function DataTable({
     const start = currentPage * pageSize;
     return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, currentPage, pageSize]);
+
+  // Detect scrollbar width to align header with content
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+
+    const checkScrollbar = () => {
+      const hasVerticalScroll = el.scrollHeight > el.clientHeight;
+      if (hasVerticalScroll) {
+        setScrollbarWidth(el.offsetWidth - el.clientWidth);
+      } else {
+        setScrollbarWidth(0);
+      }
+    };
+
+    // Check after a short delay to let virtual list render
+    const timeoutId = setTimeout(checkScrollbar, 50);
+    const resizeObserver = new ResizeObserver(checkScrollbar);
+    resizeObserver.observe(el);
+
+    return () => {
+      clearTimeout(timeoutId);
+      resizeObserver.disconnect();
+    };
+  }, [paginatedRows.length]);
 
   const rowVirtualizer = useVirtualizer({
     count: paginatedRows.length,
@@ -148,7 +174,10 @@ export function DataTable({
       />
 
       {/* Column Headers */}
-      <div className="flex border-b border-border bg-card">
+      <div 
+        className="flex border-b border-border bg-card"
+        style={{ paddingRight: scrollbarWidth > 0 ? `${scrollbarWidth}px` : undefined }}
+      >
         <div className="w-16 shrink-0 border-r border-border px-3 py-2">
           <div className="text-xs font-medium text-muted-foreground">
             #

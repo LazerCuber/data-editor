@@ -3,13 +3,16 @@ export interface DataRow {
   [key: string]: unknown;
 }
 
+export type FileType = 'json' | 'jsonl' | 'csv' | 'parquet';
+
 export interface DatasetState {
   rows: DataRow[];
   columns: string[];
   fileName: string;
-  fileType: 'json' | 'jsonl';
+  fileType: FileType;
   totalRows: number;
   modifiedRows: Set<number>;
+  rawContent?: string; // Store original content for raw view
 }
 
 export interface ColumnStats {

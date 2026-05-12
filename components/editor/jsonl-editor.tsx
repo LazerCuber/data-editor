@@ -7,15 +7,20 @@ import { EditPanel } from "./edit-panel";
 import { UploadModal } from "./upload-modal";
 import { EmptyState } from "./empty-state";
 import { FocusView } from "./focus-view";
+import { RawView } from "./raw-view";
 import {
   parseJSONL,
   parseJSON,
+  parseCSV,
+  parseParquet,
   exportToJSONL,
   exportToJSON,
+  exportToCSV,
+  generateRawContent,
   getColumns,
   getColumnStats,
 } from "@/lib/data-store";
-import type { DataRow, ColumnStats } from "@/lib/types";
+import type { DataRow, ColumnStats, FileType } from "@/lib/types";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -27,13 +32,15 @@ export function JSONLEditor() {
   const [columns, setColumns] = useState<string[]>([]);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
   const [fileName, setFileName] = useState("");
-  const [fileType, setFileType] = useState<"json" | "jsonl">("jsonl");
+  const [fileType, setFileType] = useState<FileType>("jsonl");
+  const [rawContent, setRawContent] = useState<string>("");
   const [modifiedRows, setModifiedRows] = useState<Set<number>>(new Set());
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [focusViewStart, setFocusViewStart] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"table" | "raw">("table");
 
   const PAGE_SIZE = 25;
 
@@ -51,9 +58,32 @@ export function JSONLEditor() {
   }, [rows, columns]);
 
   const handleFileLoad = useCallback(
-    (content: string, name: string, type: "json" | "jsonl") => {
+    async (content: string | ArrayBuffer, name: string, type: FileType) => {
       try {
-        const parsedRows = type === "jsonl" ? parseJSONL(content) : parseJSON(content);
+        let parsedRows: DataRow[];
+        let originalContent: string;
+
+        switch (type) {
+          case "jsonl":
+            parsedRows = parseJSONL(content as string);
+            originalContent = content as string;
+            break;
+          case "json":
+            parsedRows = parseJSON(content as string);
+            originalContent = content as string;
+            break;
+          case "csv":
+            parsedRows = parseCSV(content as string);
+            originalContent = content as string;
+            break;
+          case "parquet":
+            parsedRows = await parseParquet(content as ArrayBuffer);
+            originalContent = generateRawContent(parsedRows, type);
+            break;
+          default:
+            throw new Error("Unsupported file type");
+        }
+
         const cols = getColumns(parsedRows);
 
         setRows(parsedRows);
@@ -61,6 +91,7 @@ export function JSONLEditor() {
         setVisibleColumns(new Set(cols));
         setFileName(name);
         setFileType(type);
+        setRawContent(originalContent);
         setModifiedRows(new Set());
         setSelectedRowIndex(null);
         setSearchQuery("");
@@ -107,7 +138,7 @@ export function JSONLEditor() {
     const content = exportToJSONL(rows);
     downloadFile(
       content,
-      fileName.replace(/\.(json|jsonl)$/, ".jsonl"),
+      fileName.replace(/\.(json|jsonl|csv|parquet)$/i, ".jsonl"),
       "application/x-jsonlines"
     );
   }, [rows, fileName]);
@@ -116,8 +147,17 @@ export function JSONLEditor() {
     const content = exportToJSON(rows);
     downloadFile(
       content,
-      fileName.replace(/\.(json|jsonl)$/, ".json"),
+      fileName.replace(/\.(json|jsonl|csv|parquet)$/i, ".json"),
       "application/json"
+    );
+  }, [rows, fileName]);
+
+  const handleExportCSV = useCallback(() => {
+    const content = exportToCSV(rows);
+    downloadFile(
+      content,
+      fileName.replace(/\.(json|jsonl|csv|parquet)$/i, ".csv"),
+      "text/csv"
     );
   }, [rows, fileName]);
 
@@ -143,10 +183,19 @@ export function JSONLEditor() {
         onUpload={() => setUploadModalOpen(true)}
         onExportJSON={handleExportJSON}
         onExportJSONL={handleExportJSONL}
+        onExportCSV={handleExportCSV}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
 
       {rows.length === 0 ? (
         <EmptyState onUpload={() => setUploadModalOpen(true)} />
+      ) : viewMode === "raw" ? (
+        <RawView
+          content={rawContent}
+          fileType={fileType}
+          fileName={fileName}
+        />
       ) : (
         <ResizablePanelGroup direction="horizontal" className="flex-1">
           <ResizablePanel defaultSize={65} minSize={40}>

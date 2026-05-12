@@ -1,4 +1,5 @@
-import type { DataRow, DatasetState, ColumnStats } from './types';
+import type { DataRow, DatasetState, ColumnStats, FileType } from './types';
+import Papa from 'papaparse';
 
 export function parseJSONL(content: string): DataRow[] {
   const lines = content.split('\n').filter(line => line.trim());
@@ -28,6 +29,50 @@ export function parseJSON(content: string): DataRow[] {
   }
 }
 
+export function parseCSV(content: string): DataRow[] {
+  const result = Papa.parse(content, {
+    header: true,
+    skipEmptyLines: true,
+    dynamicTyping: true,
+  });
+
+  if (result.errors.length > 0) {
+    console.warn('CSV parse warnings:', result.errors);
+  }
+
+  return result.data.map((item, index) => ({
+    _index: index,
+    ...(item as Record<string, unknown>),
+  }));
+}
+
+export async function parseParquet(buffer: ArrayBuffer): Promise<DataRow[]> {
+  // Dynamic import for parquet-wasm to avoid SSR issues
+  const { readParquet } = await import('parquet-wasm');
+  const uint8Array = new Uint8Array(buffer);
+  const arrowTable = readParquet(uint8Array);
+  
+  // Convert Arrow table to JSON-like format
+  const rows: DataRow[] = [];
+  const schema = arrowTable.schema;
+  const fields = schema.fields;
+  const numRows = arrowTable.numRows;
+  
+  for (let i = 0; i < numRows; i++) {
+    const row: DataRow = { _index: i };
+    for (let j = 0; j < fields.length; j++) {
+      const field = fields[j];
+      const column = arrowTable.getChildAt(j);
+      if (column) {
+        row[field.name] = column.get(i);
+      }
+    }
+    rows.push(row);
+  }
+  
+  return rows;
+}
+
 export function exportToJSONL(rows: DataRow[]): string {
   return rows.map(row => {
     const { _index, ...rest } = row;
@@ -41,6 +86,33 @@ export function exportToJSON(rows: DataRow[]): string {
     return rest;
   });
   return JSON.stringify(cleaned, null, 2);
+}
+
+export function exportToCSV(rows: DataRow[]): string {
+  const cleaned = rows.map(row => {
+    const { _index, ...rest } = row;
+    return rest;
+  });
+  return Papa.unparse(cleaned);
+}
+
+export function generateRawContent(rows: DataRow[], fileType: FileType): string {
+  switch (fileType) {
+    case 'jsonl':
+      return exportToJSONL(rows);
+    case 'json':
+      return exportToJSON(rows);
+    case 'csv':
+      return exportToCSV(rows);
+    case 'parquet':
+      return '[Parquet files are binary format - raw view shows parsed data as JSON]\n' + 
+        JSON.stringify(rows.slice(0, 100).map(r => {
+          const { _index, ...rest } = r;
+          return rest;
+        }), null, 2);
+    default:
+      return '';
+  }
 }
 
 export function getColumns(rows: DataRow[]): string[] {

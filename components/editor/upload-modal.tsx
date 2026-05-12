@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Upload, FileJson, X, AlertCircle } from "lucide-react";
+import { Upload, FileJson, X, AlertCircle, FileSpreadsheet, FileType } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,11 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { FileType as DataFileType } from "@/lib/types";
 
 interface UploadModalProps {
   open: boolean;
   onClose: () => void;
-  onFileLoad: (content: string, fileName: string, fileType: "json" | "jsonl") => void;
+  onFileLoad: (content: string | ArrayBuffer, fileName: string, fileType: DataFileType) => void;
 }
 
 export function UploadModal({ open, onClose, onFileLoad }: UploadModalProps) {
@@ -30,14 +31,21 @@ export function UploadModal({ open, onClose, onFileLoad }: UploadModalProps) {
       const fileName = file.name;
       const ext = fileName.split(".").pop()?.toLowerCase();
 
-      if (ext !== "json" && ext !== "jsonl") {
-        throw new Error("Please upload a .json or .jsonl file");
+      const supportedFormats = ["json", "jsonl", "csv", "parquet"];
+      if (!ext || !supportedFormats.includes(ext)) {
+        throw new Error("Please upload a .json, .jsonl, .csv, or .parquet file");
       }
 
-      const content = await file.text();
-      const fileType = ext as "json" | "jsonl";
+      const fileType = ext as DataFileType;
 
-      onFileLoad(content, fileName, fileType);
+      if (fileType === "parquet") {
+        const buffer = await file.arrayBuffer();
+        onFileLoad(buffer, fileName, fileType);
+      } else {
+        const content = await file.text();
+        onFileLoad(content, fileName, fileType);
+      }
+      
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load file");
@@ -74,11 +82,11 @@ export function UploadModal({ open, onClose, onFileLoad }: UploadModalProps) {
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileJson className="h-5 w-5 text-primary" />
+            <FileSpreadsheet className="h-5 w-5 text-primary" />
             Upload Dataset
           </DialogTitle>
           <DialogDescription>
-            Upload a .json or .jsonl file to view and edit your dataset.
+            Upload a dataset file to view and edit your data.
           </DialogDescription>
         </DialogHeader>
 
@@ -102,11 +110,11 @@ export function UploadModal({ open, onClose, onFileLoad }: UploadModalProps) {
             Drop your file here, or browse
           </p>
           <p className="mb-4 text-center text-xs text-muted-foreground">
-            Supports .json and .jsonl files
+            Supports .json, .jsonl, .csv, and .parquet files
           </p>
           <input
             type="file"
-            accept=".json,.jsonl"
+            accept=".json,.jsonl,.csv,.parquet"
             onChange={handleFileSelect}
             className="absolute inset-0 cursor-pointer opacity-0"
             disabled={isLoading}
