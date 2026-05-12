@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -40,50 +40,54 @@ export function FocusView({
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [hasUnsaved, setHasUnsaved] = useState(false);
+  const lastLoadedRowRef = useRef<number | null>(null);
 
-  const activeCols = columns.filter((c) => visibleColumns.has(c));
+  // Memoize activeCols to prevent recreation on every render
+  const activeCols = useMemo(
+    () => columns.filter((c) => visibleColumns.has(c)),
+    [columns, visibleColumns]
+  );
   const currentRow = rows[cursor];
 
-  const loadRow = useCallback(
-    (row: DataRow) => {
-      const vals: Record<string, string> = {};
-      for (const col of activeCols) {
-        const v = row[col];
-        vals[col] =
-          v === null || v === undefined
-            ? ""
-            : typeof v === "object"
-            ? JSON.stringify(v, null, 2)
-            : String(v);
-      }
-      setEditedValues(vals);
-      setHasUnsaved(false);
-    },
-    [activeCols]
-  );
-
+  // Load row values into state
   useEffect(() => {
-    if (currentRow) loadRow(currentRow);
-  }, [cursor, currentRow, loadRow]);
+    if (!currentRow) return;
+    // Prevent infinite loop by tracking last loaded row
+    if (lastLoadedRowRef.current === currentRow._index) return;
+    lastLoadedRowRef.current = currentRow._index;
+
+    const vals: Record<string, string> = {};
+    for (const col of activeCols) {
+      const v = currentRow[col];
+      vals[col] =
+        v === null || v === undefined
+          ? ""
+          : typeof v === "object"
+          ? JSON.stringify(v, null, 2)
+          : String(v);
+    }
+    setEditedValues(vals);
+    setHasUnsaved(false);
+  }, [cursor, currentRow, activeCols]);
 
   // Keyboard navigation
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key === "ArrowLeft" || (e.altKey && e.key === "ArrowUp")) {
-        if (cursor > 0) goTo(cursor - 1);
+        if (cursor > 0) setCursor(cursor - 1);
       }
       if (e.key === "ArrowRight" || (e.altKey && e.key === "ArrowDown")) {
-        if (cursor < rows.length - 1) goTo(cursor + 1);
+        if (cursor < rows.length - 1) setCursor(cursor + 1);
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [cursor, rows.length]);
+  }, [cursor, rows.length, onClose]);
 
-  const goTo = (idx: number) => {
+  const goTo = useCallback((idx: number) => {
     setCursor(idx);
-  };
+  }, []);
 
   const handleChange = (col: string, val: string) => {
     setEditedValues((prev) => ({ ...prev, [col]: val }));
@@ -118,9 +122,22 @@ export function FocusView({
     if (cursor < rows.length - 1) goTo(cursor + 1);
   };
 
-  const handleReset = () => {
-    if (currentRow) loadRow(currentRow);
-  };
+  const handleReset = useCallback(() => {
+    if (!currentRow) return;
+    lastLoadedRowRef.current = null; // Force reload
+    const vals: Record<string, string> = {};
+    for (const col of activeCols) {
+      const v = currentRow[col];
+      vals[col] =
+        v === null || v === undefined
+          ? ""
+          : typeof v === "object"
+          ? JSON.stringify(v, null, 2)
+          : String(v);
+    }
+    setEditedValues(vals);
+    setHasUnsaved(false);
+  }, [currentRow, activeCols]);
 
   const handleCopy = async (col: string) => {
     await navigator.clipboard.writeText(editedValues[col] ?? "");
