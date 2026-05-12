@@ -6,6 +6,7 @@ import { DataTable } from "./data-table";
 import { EditPanel } from "./edit-panel";
 import { UploadModal } from "./upload-modal";
 import { EmptyState } from "./empty-state";
+import { FocusView } from "./focus-view";
 import {
   parseJSONL,
   parseJSON,
@@ -24,6 +25,7 @@ import {
 export function JSONLEditor() {
   const [rows, setRows] = useState<DataRow[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
   const [fileName, setFileName] = useState("");
   const [fileType, setFileType] = useState<"json" | "jsonl">("jsonl");
   const [modifiedRows, setModifiedRows] = useState<Set<number>>(new Set());
@@ -31,6 +33,7 @@ export function JSONLEditor() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [focusViewStart, setFocusViewStart] = useState<number | null>(null);
 
   const PAGE_SIZE = 25;
 
@@ -55,12 +58,14 @@ export function JSONLEditor() {
 
         setRows(parsedRows);
         setColumns(cols);
+        setVisibleColumns(new Set(cols));
         setFileName(name);
         setFileType(type);
         setModifiedRows(new Set());
         setSelectedRowIndex(null);
         setSearchQuery("");
         setCurrentPage(0);
+        setFocusViewStart(null);
       } catch (err) {
         console.error("Failed to parse file:", err);
       }
@@ -80,14 +85,40 @@ export function JSONLEditor() {
     []
   );
 
+  const handleToggleColumn = useCallback((col: string) => {
+    setVisibleColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(col)) {
+        // Don't hide if it's the last visible column
+        if (next.size <= 1) return prev;
+        next.delete(col);
+      } else {
+        next.add(col);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleShowAllColumns = useCallback(() => {
+    setVisibleColumns(new Set(columns));
+  }, [columns]);
+
   const handleExportJSONL = useCallback(() => {
     const content = exportToJSONL(rows);
-    downloadFile(content, fileName.replace(/\.(json|jsonl)$/, ".jsonl"), "application/x-jsonlines");
+    downloadFile(
+      content,
+      fileName.replace(/\.(json|jsonl)$/, ".jsonl"),
+      "application/x-jsonlines"
+    );
   }, [rows, fileName]);
 
   const handleExportJSON = useCallback(() => {
     const content = exportToJSON(rows);
-    downloadFile(content, fileName.replace(/\.(json|jsonl)$/, ".json"), "application/json");
+    downloadFile(
+      content,
+      fileName.replace(/\.(json|jsonl)$/, ".json"),
+      "application/json"
+    );
   }, [rows, fileName]);
 
   const downloadFile = (content: string, filename: string, mimeType: string) => {
@@ -122,9 +153,13 @@ export function JSONLEditor() {
             <DataTable
               rows={rows}
               columns={columns}
+              visibleColumns={visibleColumns}
+              onToggleColumn={handleToggleColumn}
+              onShowAllColumns={handleShowAllColumns}
               columnStats={columnStats}
               selectedRow={selectedRowIndex}
               onSelectRow={setSelectedRowIndex}
+              onOpenFocusView={setFocusViewStart}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               currentPage={currentPage}
@@ -137,7 +172,7 @@ export function JSONLEditor() {
           <ResizablePanel defaultSize={35} minSize={25}>
             <EditPanel
               selectedRow={selectedRow}
-              columns={columns}
+              columns={columns.filter((c) => visibleColumns.has(c))}
               onSave={handleSaveRow}
             />
           </ResizablePanel>
@@ -149,6 +184,18 @@ export function JSONLEditor() {
         onClose={() => setUploadModalOpen(false)}
         onFileLoad={handleFileLoad}
       />
+
+      {focusViewStart !== null && (
+        <FocusView
+          rows={rows}
+          columns={columns}
+          visibleColumns={visibleColumns}
+          startIndex={focusViewStart}
+          modifiedRows={modifiedRows}
+          onSave={handleSaveRow}
+          onClose={() => setFocusViewStart(null)}
+        />
+      )}
     </div>
   );
 }

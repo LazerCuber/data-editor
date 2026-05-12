@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -76,6 +77,9 @@ export function UploadModal({ open, onClose, onFileLoad }: UploadModalProps) {
             <FileJson className="h-5 w-5 text-primary" />
             Upload Dataset
           </DialogTitle>
+          <DialogDescription>
+            Upload a .json or .jsonl file to view and edit your dataset.
+          </DialogDescription>
         </DialogHeader>
 
         <div

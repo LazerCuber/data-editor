@@ -2,18 +2,23 @@
 
 import { useRef, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Rows3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { DataRow, ColumnStats } from "@/lib/types";
 import { ColumnHeader } from "./column-header";
+import { ColumnVisibilityBar } from "./column-visibility-bar";
 
 interface DataTableProps {
   rows: DataRow[];
   columns: string[];
+  visibleColumns: Set<string>;
+  onToggleColumn: (col: string) => void;
+  onShowAllColumns: () => void;
   columnStats: Map<string, ColumnStats>;
   selectedRow: number | null;
   onSelectRow: (index: number) => void;
+  onOpenFocusView: (rowArrayIndex: number) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   currentPage: number;
@@ -25,9 +30,13 @@ interface DataTableProps {
 export function DataTable({
   rows,
   columns,
+  visibleColumns,
+  onToggleColumn,
+  onShowAllColumns,
   columnStats,
   selectedRow,
   onSelectRow,
+  onOpenFocusView,
   searchQuery,
   onSearchChange,
   currentPage,
@@ -36,6 +45,11 @@ export function DataTable({
   modifiedRows,
 }: DataTableProps) {
   const parentRef = useRef<HTMLDivElement>(null);
+
+  const activeCols = useMemo(
+    () => columns.filter((c) => visibleColumns.has(c)),
+    [columns, visibleColumns]
+  );
 
   const filteredRows = useMemo(() => {
     if (!searchQuery.trim()) return rows;
@@ -62,7 +76,7 @@ export function DataTable({
     overscan: 10,
   });
 
-  const truncateText = useCallback((text: unknown, maxLength = 100): string => {
+  const truncateText = useCallback((text: unknown, maxLength = 90): string => {
     if (text === null || text === undefined) return "";
     const str = typeof text === "object" ? JSON.stringify(text) : String(text);
     if (str.length <= maxLength) return str;
@@ -76,7 +90,11 @@ export function DataTable({
     } else {
       pages.push(0);
       if (currentPage > 2) pages.push("...");
-      for (let i = Math.max(1, currentPage - 1); i <= Math.min(totalPages - 2, currentPage + 1); i++) {
+      for (
+        let i = Math.max(1, currentPage - 1);
+        i <= Math.min(totalPages - 2, currentPage + 1);
+        i++
+      ) {
         pages.push(i);
       }
       if (currentPage < totalPages - 3) pages.push("...");
@@ -87,9 +105,9 @@ export function DataTable({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Search */}
-      <div className="border-b border-border p-3">
-        <div className="relative">
+      {/* Search + Focus View */}
+      <div className="flex items-center gap-2 border-b border-border p-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search this dataset"
@@ -101,15 +119,43 @@ export function DataTable({
             className="bg-secondary pl-9"
           />
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            // Open focus view at first visible row
+            const startIdx = currentPage * pageSize;
+            const target = filteredRows[startIdx];
+            if (target) {
+              const globalIdx = rows.findIndex((r) => r._index === target._index);
+              onOpenFocusView(globalIdx >= 0 ? globalIdx : 0);
+            }
+          }}
+          className="shrink-0 gap-1.5"
+          disabled={rows.length === 0}
+        >
+          <Rows3 className="h-4 w-4" />
+          Focus View
+        </Button>
       </div>
+
+      {/* Column Visibility */}
+      <ColumnVisibilityBar
+        columns={columns}
+        visibleColumns={visibleColumns}
+        onToggleColumn={onToggleColumn}
+        onShowAll={onShowAllColumns}
+      />
 
       {/* Column Headers */}
       <div className="flex border-b border-border bg-card">
-        <div className="w-20 shrink-0 border-r border-border px-3 py-2">
-          <div className="text-xs font-medium text-muted-foreground">_row_index</div>
+        <div className="w-16 shrink-0 border-r border-border px-3 py-2">
+          <div className="text-xs font-medium text-muted-foreground">
+            #
+          </div>
           <div className="text-[10px] text-muted-foreground/60">int64</div>
         </div>
-        {columns.map((col) => (
+        {activeCols.map((col) => (
           <ColumnHeader key={col} column={col} stats={columnStats.get(col)} />
         ))}
       </div>
@@ -136,20 +182,23 @@ export function DataTable({
                 className={`absolute left-0 top-0 flex w-full cursor-pointer border-b border-border transition-colors hover:bg-secondary/50 ${
                   isSelected ? "bg-primary/10" : ""
                 } ${isModified ? "border-l-2 border-l-chart-5" : ""}`}
-                style={{
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
                 onClick={() => onSelectRow(row._index)}
+                onDoubleClick={() => {
+                  const globalIdx = rows.findIndex((r) => r._index === row._index);
+                  if (globalIdx >= 0) onOpenFocusView(globalIdx);
+                }}
+                title="Click to select · Double-click to open in Focus View"
               >
-                <div className="flex w-20 shrink-0 items-center border-r border-border px-3 py-3">
+                <div className="flex w-16 shrink-0 items-center border-r border-border px-3 py-3">
                   <span className="text-sm text-muted-foreground">
                     {row._index}
                   </span>
                 </div>
-                {columns.map((col) => (
+                {activeCols.map((col) => (
                   <div
                     key={col}
-                    className="flex min-w-[200px] flex-1 items-center border-r border-border px-3 py-3"
+                    className="flex min-w-[180px] flex-1 items-center border-r border-border px-3 py-3"
                   >
                     <span className="line-clamp-2 text-sm text-foreground">
                       {truncateText(row[col])}
@@ -175,11 +224,14 @@ export function DataTable({
             <ChevronLeft className="h-4 w-4" />
             Previous
           </Button>
-          
+
           <div className="flex items-center gap-1">
             {getPageNumbers().map((page, idx) =>
               typeof page === "string" ? (
-                <span key={`ellipsis-${idx}`} className="px-2 text-muted-foreground">
+                <span
+                  key={`ellipsis-${idx}`}
+                  className="px-2 text-muted-foreground"
+                >
                   ...
                 </span>
               ) : (
