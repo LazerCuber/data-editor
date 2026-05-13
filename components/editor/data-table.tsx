@@ -98,7 +98,7 @@ export function DataTable({
   const rowVirtualizer = useVirtualizer({
     count: paginatedRows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 40,
+    estimateSize: () => 56,
     overscan: 10,
   });
 

@@ -51,46 +51,6 @@ export function JSONLEditor() {
     return generateRawContent(rows, fileType);
   }, [rows, fileType]);
 
-  const handleLoadFromCloud = useCallback(
-    (content: string, name: string, type: FileType) => {
-      try {
-        let parsedRows: DataRow[];
-
-        switch (type) {
-          case "jsonl":
-            parsedRows = parseJSONL(content);
-            break;
-          case "json":
-            parsedRows = parseJSON(content);
-            break;
-          case "csv":
-            parsedRows = parseCSV(content);
-            break;
-          default:
-            throw new Error("Unsupported file type from cloud");
-        }
-
-        const cols = getColumns(parsedRows);
-
-        setRows(parsedRows);
-        setColumns(cols);
-        setVisibleColumns(new Set(cols));
-        setFileName(name);
-        setFileType(type);
-        setRawContent(content);
-        setModifiedRows(new Set());
-        setSelectedRowIndex(null);
-        setSearchQuery("");
-        setCurrentPage(0);
-        setFocusViewStart(null);
-        setActiveTab("editor");
-      } catch (err) {
-        console.error("Failed to parse cloud file:", err);
-      }
-    },
-    []
-  );
-
   const PAGE_SIZE = 25;
 
   const selectedRow = useMemo(() => {
@@ -241,7 +201,6 @@ export function JSONLEditor() {
 
       {activeTab === "projects" ? (
         <ProjectsPanel
-          onLoadProject={handleLoadFromCloud}
           currentFileName={fileName}
           currentContent={currentContent}
           currentFileType={fileType}
