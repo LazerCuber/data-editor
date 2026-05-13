@@ -182,6 +182,7 @@ export function DataTable({
           <div className="text-xs font-medium text-muted-foreground">
             #
           </div>
+          <div className="text-[10px] text-muted-foreground/60">int64</div>
         </div>
         {activeCols.map((col) => (
           <ColumnHeader key={col} column={col} stats={columnStats.get(col)} />
