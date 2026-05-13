@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import useSWR, { mutate } from "swr";
+import { useState, useEffect, useCallback } from "react";
 import {
-  Cloud,
   Trash2,
   Download,
   FileJson,
@@ -11,7 +9,9 @@ import {
   Table2,
   Loader2,
   FolderOpen,
-  CloudUpload,
+  Save,
+  AlertTriangle,
+  HardDrive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,12 +35,16 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { FileType } from "@/lib/types";
 
-interface Project {
-  pathname: string;
+interface ProjectMetadata {
+  id: string;
   fileName: string;
-  size: number;
-  uploadedAt: string;
-  url: string;
+  fileType: FileType;
+  rowCount: number;
+  columnCount: number;
+  columns: string[];
+  savedAt: string;
+  size: number; // Approximate size in bytes
+  isLargeDataset: boolean;
 }
 
 interface ProjectsPanelProps {
@@ -48,9 +52,13 @@ interface ProjectsPanelProps {
   currentFileName: string;
   currentContent: string;
   currentFileType: FileType;
+  currentRowCount?: number;
+  currentColumns?: string[];
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const STORAGE_KEY = "data-editor-projects";
+const MAX_STORAGE_SIZE = 4 * 1024 * 1024; // 4MB localStorage limit safety margin
+const LARGE_DATASET_THRESHOLD = 1000; // Rows threshold for "large dataset" warning
 
 function getFileIcon(fileName: string) {
   const ext = fileName.split(".").pop()?.toLowerCase();
@@ -80,91 +88,147 @@ function formatDate(dateString: string): string {
   });
 }
 
+function getStorageUsage(): number {
+  let total = 0;
+  for (const key in localStorage) {
+    if (localStorage.hasOwnProperty(key) && key.startsWith("data-editor")) {
+      total += localStorage[key].length * 2; // UTF-16 = 2 bytes per char
+    }
+  }
+  return total;
+}
+
 export function ProjectsPanel({
   onLoadProject,
   currentFileName,
   currentContent,
   currentFileType,
+  currentRowCount = 0,
+  currentColumns = [],
 }: ProjectsPanelProps) {
-  const { data, error, isLoading } = useSWR<{ projects: Project[] }>(
-    "/api/projects",
-    fetcher
-  );
+  const [projects, setProjects] = useState<ProjectMetadata[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingProject, setLoadingProject] = useState<string | null>(null);
   const [deletingProject, setDeletingProject] = useState<string | null>(null);
+  const [storageUsage, setStorageUsage] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSaveToCloud = async () => {
+  // Load projects from localStorage
+  const loadProjects = useCallback(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as ProjectMetadata[];
+        setProjects(parsed.sort((a, b) => 
+          new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
+        ));
+      }
+      setStorageUsage(getStorageUsage());
+    } catch (err) {
+      console.error("Failed to load projects:", err);
+      setError("Failed to load saved projects");
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
+  const handleSaveProject = async () => {
     if (!currentFileName || !currentContent) return;
 
     setSaving(true);
+    setError(null);
+
     try {
-      console.log("[v0] Saving to cloud:", currentFileName, "size:", currentContent.length);
-      const response = await fetch("/api/projects/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: currentContent,
-          fileName: currentFileName,
-          fileType: currentFileType,
-        }),
-      });
-
-      const responseText = await response.text();
-      console.log("[v0] Upload response status:", response.status, "body:", responseText);
-
-      if (!response.ok) {
-        const errorData = JSON.parse(responseText);
-        throw new Error(errorData.error || "Failed to save");
+      const contentSize = currentContent.length * 2;
+      const currentUsage = getStorageUsage();
+      
+      // Check if we'd exceed storage limits
+      if (currentUsage + contentSize > MAX_STORAGE_SIZE) {
+        setError(`Storage limit exceeded. Current usage: ${formatFileSize(currentUsage)}. Please delete some projects first.`);
+        setSaving(false);
+        return;
       }
 
-      console.log("[v0] Upload successful");
-      // Refresh the projects list
-      mutate("/api/projects");
+      const id = `project-${Date.now()}`;
+      const isLargeDataset = currentRowCount > LARGE_DATASET_THRESHOLD;
+
+      // Save metadata
+      const metadata: ProjectMetadata = {
+        id,
+        fileName: currentFileName,
+        fileType: currentFileType,
+        rowCount: currentRowCount,
+        columnCount: currentColumns.length,
+        columns: currentColumns,
+        savedAt: new Date().toISOString(),
+        size: contentSize,
+        isLargeDataset,
+      };
+
+      // Save content separately
+      localStorage.setItem(`data-editor-content-${id}`, currentContent);
+
+      // Update projects list
+      const existingProjects = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]") as ProjectMetadata[];
+      const updatedProjects = [metadata, ...existingProjects];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProjects));
+
+      loadProjects();
     } catch (err) {
-      console.error("[v0] Failed to save project:", err);
+      console.error("Failed to save project:", err);
+      if (err instanceof DOMException && err.name === "QuotaExceededError") {
+        setError("Storage quota exceeded. Please delete some projects to free up space.");
+      } else {
+        setError("Failed to save project");
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  const handleLoadProject = async (project: Project) => {
-    setLoadingProject(project.pathname);
-    try {
-      const response = await fetch(
-        `/api/projects/file?pathname=${encodeURIComponent(project.pathname)}`
-      );
-      if (!response.ok) throw new Error("Failed to load");
+  const handleLoadProject = async (project: ProjectMetadata) => {
+    setLoadingProject(project.id);
+    setError(null);
 
-      const content = await response.text();
-      const ext = project.fileName.split(".").pop()?.toLowerCase() as FileType;
-      onLoadProject(content, project.fileName, ext || "json");
+    try {
+      const content = localStorage.getItem(`data-editor-content-${project.id}`);
+      if (!content) {
+        throw new Error("Project data not found");
+      }
+      onLoadProject(content, project.fileName, project.fileType);
     } catch (err) {
       console.error("Failed to load project:", err);
+      setError("Failed to load project");
     } finally {
       setLoadingProject(null);
     }
   };
 
-  const handleDeleteProject = async (project: Project) => {
-    setDeletingProject(project.pathname);
+  const handleDeleteProject = async (project: ProjectMetadata) => {
+    setDeletingProject(project.id);
+    setError(null);
+
     try {
-      const response = await fetch("/api/projects", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: project.url }),
-      });
+      // Remove content
+      localStorage.removeItem(`data-editor-content-${project.id}`);
 
-      if (!response.ok) throw new Error("Failed to delete");
+      // Update projects list
+      const existingProjects = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]") as ProjectMetadata[];
+      const updatedProjects = existingProjects.filter((p) => p.id !== project.id);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProjects));
 
-      // Refresh the projects list
-      mutate("/api/projects");
+      loadProjects();
     } catch (err) {
       console.error("Failed to delete project:", err);
+      setError("Failed to delete project");
     } finally {
       setDeletingProject(null);
     }
   };
+
+  const isCurrentTooLarge = currentContent.length * 2 + getStorageUsage() > MAX_STORAGE_SIZE;
 
   return (
     <Card className="h-full flex flex-col border-0 rounded-none">
@@ -172,40 +236,51 @@ export function ProjectsPanel({
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Cloud className="h-4 w-4" />
-              Cloud Projects
+              <HardDrive className="h-4 w-4" />
+              Local Projects
             </CardTitle>
             <CardDescription className="text-xs mt-1">
-              Save and load your datasets from the cloud
+              Save datasets locally in your browser
             </CardDescription>
           </div>
           <Button
             size="sm"
-            onClick={handleSaveToCloud}
-            disabled={!currentFileName || saving}
+            onClick={handleSaveProject}
+            disabled={!currentFileName || saving || isCurrentTooLarge}
             className="gap-1.5"
+            title={isCurrentTooLarge ? "Dataset too large to save locally" : undefined}
           >
             {saving ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <CloudUpload className="h-3.5 w-3.5" />
+              <Save className="h-3.5 w-3.5" />
             )}
             Save Current
           </Button>
         </div>
+        
+        {/* Storage indicator */}
+        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-primary transition-all"
+              style={{ width: `${Math.min((storageUsage / MAX_STORAGE_SIZE) * 100, 100)}%` }}
+            />
+          </div>
+          <span>{formatFileSize(storageUsage)} / {formatFileSize(MAX_STORAGE_SIZE)}</span>
+        </div>
       </CardHeader>
+      
       <CardContent className="flex-1 min-h-0 p-0">
+        {error && (
+          <div className="mx-4 mb-2 flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            {error}
+          </div>
+        )}
+        
         <ScrollArea className="h-full px-4 pb-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-              Loading projects...
-            </div>
-          ) : error ? (
-            <div className="flex items-center justify-center py-8 text-destructive">
-              Failed to load projects
-            </div>
-          ) : !data?.projects?.length ? (
+          {projects.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
               <FolderOpen className="h-10 w-10 mb-2 opacity-50" />
               <p className="text-sm">No saved projects yet</p>
@@ -213,9 +288,9 @@ export function ProjectsPanel({
             </div>
           ) : (
             <div className="space-y-2">
-              {data.projects.map((project) => (
+              {projects.map((project) => (
                 <div
-                  key={project.pathname}
+                  key={project.id}
                   className="group flex items-center justify-between rounded-lg border border-border bg-card p-3 hover:bg-accent/50 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -225,9 +300,16 @@ export function ProjectsPanel({
                         {project.fileName}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatFileSize(project.size)} • {formatDate(project.uploadedAt)}
+                        {project.rowCount.toLocaleString()} rows, {project.columnCount} cols
+                        {" "}({formatFileSize(project.size)})
+                        {" "}({formatDate(project.savedAt)})
                       </p>
                     </div>
+                    {project.isLargeDataset && (
+                      <span className="shrink-0 rounded bg-chart-5/20 px-1.5 py-0.5 text-[10px] text-chart-5">
+                        Large
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button
@@ -235,9 +317,9 @@ export function ProjectsPanel({
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => handleLoadProject(project)}
-                      disabled={loadingProject === project.pathname}
+                      disabled={loadingProject === project.id}
                     >
-                      {loadingProject === project.pathname ? (
+                      {loadingProject === project.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <Download className="h-4 w-4" />
@@ -249,9 +331,9 @@ export function ProjectsPanel({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive"
-                          disabled={deletingProject === project.pathname}
+                          disabled={deletingProject === project.id}
                         >
-                          {deletingProject === project.pathname ? (
+                          {deletingProject === project.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
                             <Trash2 className="h-4 w-4" />
@@ -262,7 +344,7 @@ export function ProjectsPanel({
                         <AlertDialogHeader>
                           <AlertDialogTitle>Delete Project?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will permanently delete &quot;{project.fileName}&quot; from the cloud. This action cannot be undone.
+                            This will permanently delete &quot;{project.fileName}&quot; from local storage. This action cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

@@ -146,7 +146,7 @@ export function DataTable({
           />
         </div>
         <Button
-          variant="outline"
+          variant="default"
           size="sm"
           onClick={() => {
             // Open focus view at first visible row

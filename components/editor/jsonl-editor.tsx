@@ -9,8 +9,7 @@ import { EmptyState } from "./empty-state";
 import { FocusView } from "./focus-view";
 import { RawView } from "./raw-view";
 import { ProjectsPanel } from "./projects-panel";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Cloud, Table } from "lucide-react";
+
 import {
   parseJSONL,
   parseJSON,
@@ -246,6 +245,8 @@ export function JSONLEditor() {
           currentFileName={fileName}
           currentContent={currentContent}
           currentFileType={fileType}
+          currentRowCount={rows.length}
+          currentColumns={columns}
         />
       ) : rows.length === 0 ? (
         <EmptyState onUpload={() => setUploadModalOpen(true)} />

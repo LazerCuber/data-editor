@@ -111,12 +111,12 @@ export function RawView({ content, fileType, fileName }: RawViewProps) {
 
       {/* Virtualized Content */}
       <div ref={parentRef} className="flex-1 overflow-auto bg-background p-4">
-        <pre className="font-mono text-sm">
+        <pre className="font-mono text-sm min-w-max">
           <code>
             <div
               style={{
                 height: `${rowVirtualizer.getTotalSize()}px`,
-                width: "100%",
+                minWidth: "100%",
                 position: "relative",
               }}
             >
@@ -127,7 +127,7 @@ export function RawView({ content, fileType, fileName }: RawViewProps) {
                 return (
                   <div
                     key={virtualRow.index}
-                    className="absolute left-0 top-0 flex w-full hover:bg-secondary/30"
+                    className="absolute left-0 top-0 flex hover:bg-secondary/30 whitespace-pre"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
@@ -136,7 +136,7 @@ export function RawView({ content, fileType, fileName }: RawViewProps) {
                     <span className="mr-4 w-14 shrink-0 select-none text-right text-muted-foreground/50">
                       {index + 1}
                     </span>
-                    <span className="flex-1 truncate text-foreground">
+                    <span className="text-foreground">
                       {searchQuery ? highlightMatches(text, searchQuery) : text || " "}
                       {truncated && (
                         <span className="text-muted-foreground/50">... ({line.length.toLocaleString()} chars)</span>
