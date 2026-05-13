@@ -1,6 +1,6 @@
 "use client";
 
-import { Database, Upload, FileJson, FileSpreadsheet, Table2, Cloud } from "lucide-react";
+import { Database, Upload, FileJson, FileSpreadsheet, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface EmptyStateProps {
@@ -18,7 +18,7 @@ export function EmptyState({ onUpload }: EmptyStateProps) {
       </h2>
       <p className="mb-6 max-w-md text-center text-muted-foreground">
         Upload your dataset to view, edit, and export your data
-        with perfect format preservation and cloud storage.
+        with perfect format preservation.
       </p>
       <Button onClick={onUpload} size="lg" className="gap-2">
         <Upload className="h-4 w-4" />
@@ -62,10 +62,6 @@ export function EmptyState({ onUpload }: EmptyStateProps) {
         <div className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-chart-3" />
           <span>Edit & export</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Cloud className="h-3.5 w-3.5" />
-          <span>Cloud storage</span>
         </div>
       </div>
     </div>
