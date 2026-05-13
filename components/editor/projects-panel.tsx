@@ -1,288 +1,163 @@
 "use client";
 
-import { useState } from "react";
-import useSWR, { mutate } from "swr";
+import { useMemo } from "react";
 import {
-  Cloud,
-  Trash2,
-  Download,
   FileJson,
   FileSpreadsheet,
   Table2,
-  Loader2,
-  FolderOpen,
-  CloudUpload,
+  Rows3,
+  Columns3,
+  Clock,
+  HardDrive,
+  Hash,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import type { FileType } from "@/lib/types";
 
-interface Project {
-  pathname: string;
-  fileName: string;
-  size: number;
-  uploadedAt: string;
-  url: string;
-}
-
 interface ProjectsPanelProps {
-  onLoadProject: (content: string, fileName: string, fileType: FileType) => void;
   currentFileName: string;
   currentContent: string;
   currentFileType: FileType;
+  currentRowCount?: number;
+  currentColumns?: string[];
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
-function getFileIcon(fileName: string) {
-  const ext = fileName.split(".").pop()?.toLowerCase();
-  switch (ext) {
+function getFileIcon(fileType: FileType) {
+  switch (fileType) {
     case "csv":
-      return <FileSpreadsheet className="h-4 w-4 text-green-500" />;
+      return <FileSpreadsheet className="h-5 w-5 text-emerald-500" />;
     case "parquet":
-      return <Table2 className="h-4 w-4 text-purple-500" />;
+      return <Table2 className="h-5 w-5 text-violet-500" />;
     default:
-      return <FileJson className="h-4 w-4 text-blue-500" />;
+      return <FileJson className="h-5 w-5 text-sky-500" />;
   }
 }
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 export function ProjectsPanel({
-  onLoadProject,
   currentFileName,
   currentContent,
   currentFileType,
+  currentRowCount = 0,
+  currentColumns = [],
 }: ProjectsPanelProps) {
-  const { data, error, isLoading } = useSWR<{ projects: Project[] }>(
-    "/api/projects",
-    fetcher
-  );
-  const [saving, setSaving] = useState(false);
-  const [loadingProject, setLoadingProject] = useState<string | null>(null);
-  const [deletingProject, setDeletingProject] = useState<string | null>(null);
+  const fileStats = useMemo(() => {
+    const sizeInBytes = new Blob([currentContent]).size;
+    const lineCount = currentContent.split("\n").length;
+    const charCount = currentContent.length;
+    
+    return {
+      size: sizeInBytes,
+      lines: lineCount,
+      characters: charCount,
+    };
+  }, [currentContent]);
 
-  const handleSaveToCloud = async () => {
-    if (!currentFileName || !currentContent) return;
-
-    setSaving(true);
-    try {
-      console.log("[v0] Saving to cloud:", currentFileName, "size:", currentContent.length);
-      const response = await fetch("/api/projects/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: currentContent,
-          fileName: currentFileName,
-          fileType: currentFileType,
-        }),
-      });
-
-      const responseText = await response.text();
-      console.log("[v0] Upload response status:", response.status, "body:", responseText);
-
-      if (!response.ok) {
-        const errorData = JSON.parse(responseText);
-        throw new Error(errorData.error || "Failed to save");
-      }
-
-      console.log("[v0] Upload successful");
-      // Refresh the projects list
-      mutate("/api/projects");
-    } catch (err) {
-      console.error("[v0] Failed to save project:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleLoadProject = async (project: Project) => {
-    setLoadingProject(project.pathname);
-    try {
-      const response = await fetch(
-        `/api/projects/file?pathname=${encodeURIComponent(project.pathname)}`
-      );
-      if (!response.ok) throw new Error("Failed to load");
-
-      const content = await response.text();
-      const ext = project.fileName.split(".").pop()?.toLowerCase() as FileType;
-      onLoadProject(content, project.fileName, ext || "json");
-    } catch (err) {
-      console.error("Failed to load project:", err);
-    } finally {
-      setLoadingProject(null);
-    }
-  };
-
-  const handleDeleteProject = async (project: Project) => {
-    setDeletingProject(project.pathname);
-    try {
-      const response = await fetch("/api/projects", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: project.url }),
-      });
-
-      if (!response.ok) throw new Error("Failed to delete");
-
-      // Refresh the projects list
-      mutate("/api/projects");
-    } catch (err) {
-      console.error("Failed to delete project:", err);
-    } finally {
-      setDeletingProject(null);
-    }
-  };
+  const hasFile = currentFileName && currentContent;
 
   return (
-    <Card className="h-full flex flex-col border-0 rounded-none">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Cloud className="h-4 w-4" />
-              Cloud Projects
-            </CardTitle>
-            <CardDescription className="text-xs mt-1">
-              Save and load your datasets from the cloud
-            </CardDescription>
-          </div>
-          <Button
-            size="sm"
-            onClick={handleSaveToCloud}
-            disabled={!currentFileName || saving}
-            className="gap-1.5"
-          >
-            {saving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <CloudUpload className="h-3.5 w-3.5" />
-            )}
-            Save Current
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 min-h-0 p-0">
-        <ScrollArea className="h-full px-4 pb-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-              Loading projects...
+    <div className="flex h-full flex-col items-center justify-center p-6">
+      {hasFile ? (
+        <Card className="w-full max-w-md border-border bg-card">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-3">
+              {getFileIcon(currentFileType)}
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-lg font-semibold truncate">
+                  {currentFileName}
+                </CardTitle>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mt-0.5">
+                  {currentFileType} file
+                </p>
+              </div>
             </div>
-          ) : error ? (
-            <div className="flex items-center justify-center py-8 text-destructive">
-              Failed to load projects
-            </div>
-          ) : !data?.projects?.length ? (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <FolderOpen className="h-10 w-10 mb-2 opacity-50" />
-              <p className="text-sm">No saved projects yet</p>
-              <p className="text-xs mt-1">Save your current dataset to get started</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {data.projects.map((project) => (
-                <div
-                  key={project.pathname}
-                  className="group flex items-center justify-between rounded-lg border border-border bg-card p-3 hover:bg-accent/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    {getFileIcon(project.fileName)}
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm truncate">
-                        {project.fileName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatFileSize(project.size)} • {formatDate(project.uploadedAt)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleLoadProject(project)}
-                      disabled={loadingProject === project.pathname}
-                    >
-                      {loadingProject === project.pathname ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Download className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          disabled={deletingProject === project.pathname}
-                        >
-                          {deletingProject === project.pathname ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Project?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently delete &quot;{project.fileName}&quot; from the cloud. This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDeleteProject(project)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+          </CardHeader>
+          
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 gap-4">
+              {/* Rows */}
+              <div className="flex items-center gap-3 rounded-lg bg-secondary/50 p-3">
+                <Rows3 className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">{currentRowCount.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Rows</p>
                 </div>
-              ))}
+              </div>
+              
+              {/* Columns */}
+              <div className="flex items-center gap-3 rounded-lg bg-secondary/50 p-3">
+                <Columns3 className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">{currentColumns.length}</p>
+                  <p className="text-xs text-muted-foreground">Columns</p>
+                </div>
+              </div>
+              
+              {/* File Size */}
+              <div className="flex items-center gap-3 rounded-lg bg-secondary/50 p-3">
+                <HardDrive className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">{formatFileSize(fileStats.size)}</p>
+                  <p className="text-xs text-muted-foreground">Size</p>
+                </div>
+              </div>
+              
+              {/* Lines */}
+              <div className="flex items-center gap-3 rounded-lg bg-secondary/50 p-3">
+                <Hash className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">{fileStats.lines.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Lines</p>
+                </div>
+              </div>
             </div>
-          )}
-        </ScrollArea>
-      </CardContent>
-    </Card>
+            
+            {/* Column List */}
+            {currentColumns.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Columns</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {currentColumns.slice(0, 10).map((col) => (
+                    <span
+                      key={col}
+                      className="rounded-md bg-secondary px-2 py-1 text-xs text-foreground"
+                    >
+                      {col}
+                    </span>
+                  ))}
+                  {currentColumns.length > 10 && (
+                    <span className="rounded-md bg-secondary/50 px-2 py-1 text-xs text-muted-foreground">
+                      +{currentColumns.length - 10} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Timestamp */}
+            <div className="mt-4 pt-4 border-t border-border flex items-center gap-2 text-xs text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              <span>Loaded just now</span>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-col items-center text-center text-muted-foreground">
+          <FileJson className="h-12 w-12 mb-3 opacity-30" />
+          <p className="text-sm font-medium">No file loaded</p>
+          <p className="text-xs mt-1">Upload a file to see its details here</p>
+        </div>
+      )}
+    </div>
   );
 }

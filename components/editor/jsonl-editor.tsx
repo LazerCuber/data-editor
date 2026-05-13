@@ -9,8 +9,7 @@ import { EmptyState } from "./empty-state";
 import { FocusView } from "./focus-view";
 import { RawView } from "./raw-view";
 import { ProjectsPanel } from "./projects-panel";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Cloud, Table } from "lucide-react";
+
 import {
   parseJSONL,
   parseJSON,
@@ -51,46 +50,6 @@ export function JSONLEditor() {
     if (rows.length === 0) return "";
     return generateRawContent(rows, fileType);
   }, [rows, fileType]);
-
-  const handleLoadFromCloud = useCallback(
-    (content: string, name: string, type: FileType) => {
-      try {
-        let parsedRows: DataRow[];
-
-        switch (type) {
-          case "jsonl":
-            parsedRows = parseJSONL(content);
-            break;
-          case "json":
-            parsedRows = parseJSON(content);
-            break;
-          case "csv":
-            parsedRows = parseCSV(content);
-            break;
-          default:
-            throw new Error("Unsupported file type from cloud");
-        }
-
-        const cols = getColumns(parsedRows);
-
-        setRows(parsedRows);
-        setColumns(cols);
-        setVisibleColumns(new Set(cols));
-        setFileName(name);
-        setFileType(type);
-        setRawContent(content);
-        setModifiedRows(new Set());
-        setSelectedRowIndex(null);
-        setSearchQuery("");
-        setCurrentPage(0);
-        setFocusViewStart(null);
-        setActiveTab("editor");
-      } catch (err) {
-        console.error("Failed to parse cloud file:", err);
-      }
-    },
-    []
-  );
 
   const PAGE_SIZE = 25;
 
@@ -242,10 +201,11 @@ export function JSONLEditor() {
 
       {activeTab === "projects" ? (
         <ProjectsPanel
-          onLoadProject={handleLoadFromCloud}
           currentFileName={fileName}
           currentContent={currentContent}
           currentFileType={fileType}
+          currentRowCount={rows.length}
+          currentColumns={columns}
         />
       ) : rows.length === 0 ? (
         <EmptyState onUpload={() => setUploadModalOpen(true)} />

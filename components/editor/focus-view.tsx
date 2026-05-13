@@ -250,12 +250,12 @@ export function FocusView({
       </div>
 
       {/* Content: side-by-side fields */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-y-auto overflow-x-hidden">
         {activeCols.map((col, i) => (
           <div
             key={col}
             className={cn(
-              "flex flex-1 flex-col overflow-hidden",
+              "flex flex-1 flex-col min-h-full",
               i < activeCols.length - 1 && "border-r border-border"
             )}
           >

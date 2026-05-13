@@ -39,9 +39,27 @@ export function RawView({ content, fileType, fileName }: RawViewProps) {
   });
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      // Fallback for older browsers or when clipboard API fails
+      const textArea = document.createElement("textarea");
+      textArea.value = content;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand("copy");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        console.error("Failed to copy");
+      }
+      document.body.removeChild(textArea);
+    }
   };
 
   const truncateLine = useCallback((line: string): { text: string; truncated: boolean } => {
@@ -111,12 +129,12 @@ export function RawView({ content, fileType, fileName }: RawViewProps) {
 
       {/* Virtualized Content */}
       <div ref={parentRef} className="flex-1 overflow-auto bg-background p-4">
-        <pre className="font-mono text-sm">
+        <pre className="font-mono text-sm min-w-max">
           <code>
             <div
               style={{
                 height: `${rowVirtualizer.getTotalSize()}px`,
-                width: "100%",
+                minWidth: "100%",
                 position: "relative",
               }}
             >
@@ -127,7 +145,7 @@ export function RawView({ content, fileType, fileName }: RawViewProps) {
                 return (
                   <div
                     key={virtualRow.index}
-                    className="absolute left-0 top-0 flex w-full hover:bg-secondary/30"
+                    className="absolute left-0 top-0 flex hover:bg-secondary/30 whitespace-pre"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
@@ -136,8 +154,8 @@ export function RawView({ content, fileType, fileName }: RawViewProps) {
                     <span className="mr-4 w-14 shrink-0 select-none text-right text-muted-foreground/50">
                       {index + 1}
                     </span>
-                    <span className="flex-1 truncate text-foreground">
-                      {searchQuery ? highlightMatches(text, searchQuery) : text || " "}
+                    <span className="text-foreground">
+                      {searchQuery ? highlightMatches(text, searchQuery) : syntaxHighlight(text, fileType)}
                       {truncated && (
                         <span className="text-muted-foreground/50">... ({line.length.toLocaleString()} chars)</span>
                       )}
@@ -151,6 +169,95 @@ export function RawView({ content, fileType, fileName }: RawViewProps) {
       </div>
     </div>
   );
+}
+
+function syntaxHighlight(text: string, fileType: string): React.ReactNode {
+  if (!text || text.trim() === "") return " ";
+  
+  // For JSON/JSONL files, apply syntax highlighting
+  if (fileType === "json" || fileType === "jsonl") {
+    const elements: React.ReactNode[] = [];
+    let i = 0;
+    let key = 0;
+    
+    while (i < text.length) {
+      // String (key or value)
+      if (text[i] === '"') {
+        const start = i;
+        i++;
+        while (i < text.length && text[i] !== '"') {
+          if (text[i] === '\\') i++; // Skip escaped char
+          i++;
+        }
+        i++; // Include closing quote
+        const str = text.slice(start, i);
+        
+        // Check if this is a key (followed by colon)
+        const afterStr = text.slice(i).trimStart();
+        if (afterStr.startsWith(':')) {
+          elements.push(<span key={key++} className="text-sky-400">{str}</span>);
+        } else {
+          elements.push(<span key={key++} className="text-emerald-400">{str}</span>);
+        }
+        continue;
+      }
+      
+      // Numbers
+      if (/[-\d]/.test(text[i])) {
+        const start = i;
+        if (text[i] === '-') i++;
+        while (i < text.length && /[\d.eE+-]/.test(text[i])) i++;
+        const num = text.slice(start, i);
+        if (/^-?\d+\.?\d*([eE][+-]?\d+)?$/.test(num)) {
+          elements.push(<span key={key++} className="text-amber-400">{num}</span>);
+          continue;
+        }
+        // Not a valid number, backtrack
+        i = start;
+      }
+      
+      // Booleans and null
+      const remaining = text.slice(i);
+      const boolMatch = remaining.match(/^(true|false|null)/);
+      if (boolMatch) {
+        elements.push(<span key={key++} className="text-violet-400">{boolMatch[1]}</span>);
+        i += boolMatch[1].length;
+        continue;
+      }
+      
+      // Brackets and braces
+      if ('{}[]'.includes(text[i])) {
+        elements.push(<span key={key++} className="text-muted-foreground">{text[i]}</span>);
+        i++;
+        continue;
+      }
+      
+      // Colon and comma
+      if (':,'.includes(text[i])) {
+        elements.push(<span key={key++} className="text-muted-foreground">{text[i]}</span>);
+        i++;
+        continue;
+      }
+      
+      // Whitespace and other characters
+      elements.push(text[i]);
+      i++;
+    }
+    
+    return elements;
+  }
+  
+  // For CSV, highlight commas
+  if (fileType === "csv") {
+    return text.split(',').map((part, i, arr) => (
+      <span key={i}>
+        {part}
+        {i < arr.length - 1 && <span className="text-muted-foreground">,</span>}
+      </span>
+    ));
+  }
+  
+  return text;
 }
 
 function highlightMatches(text: string, query: string): React.ReactNode {

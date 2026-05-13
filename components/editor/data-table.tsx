@@ -146,7 +146,7 @@ export function DataTable({
           />
         </div>
         <Button
-          variant="outline"
+          variant="default"
           size="sm"
           onClick={() => {
             // Open focus view at first visible row
@@ -178,7 +178,7 @@ export function DataTable({
         className="flex border-b border-border bg-card"
         style={{ paddingRight: scrollbarWidth > 0 ? `${scrollbarWidth}px` : undefined }}
       >
-        <div className="flex w-16 shrink-0 flex-col items-center justify-center border-r border-border px-3 py-2">
+        <div className="flex w-14 shrink-0 flex-col items-center justify-center border-r border-border px-2 py-2">
           <div className="text-xs font-medium text-muted-foreground">
             #
           </div>
@@ -219,15 +219,15 @@ export function DataTable({
                 }}
                 title="Click to select · Double-click to open in Focus View"
               >
-                <div className="flex w-16 shrink-0 items-center justify-center border-r border-border px-3 py-3">
-                  <span className="text-sm text-muted-foreground">
+                <div className="flex w-14 shrink-0 items-center justify-center border-r border-border px-2 py-2">
+                  <span className="text-xs text-muted-foreground">
                     {row._index}
                   </span>
                 </div>
                 {activeCols.map((col) => (
                   <div
                     key={col}
-                    className="flex min-w-[180px] flex-1 items-center border-r border-border px-3 py-3"
+                    className="flex min-w-[120px] flex-1 items-center border-r border-border px-3 py-2"
                   >
                     <span className="line-clamp-2 text-sm text-foreground">
                       {truncateText(row[col])}
