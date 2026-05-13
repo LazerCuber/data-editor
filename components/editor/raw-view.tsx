@@ -137,7 +137,7 @@ export function RawView({ content, fileType, fileName }: RawViewProps) {
                       {index + 1}
                     </span>
                     <span className="text-foreground">
-                      {searchQuery ? highlightMatches(text, searchQuery) : text || " "}
+                      {searchQuery ? highlightMatches(text, searchQuery) : syntaxHighlight(text, fileType)}
                       {truncated && (
                         <span className="text-muted-foreground/50">... ({line.length.toLocaleString()} chars)</span>
                       )}
@@ -151,6 +151,95 @@ export function RawView({ content, fileType, fileName }: RawViewProps) {
       </div>
     </div>
   );
+}
+
+function syntaxHighlight(text: string, fileType: string): React.ReactNode {
+  if (!text || text.trim() === "") return " ";
+  
+  // For JSON/JSONL files, apply syntax highlighting
+  if (fileType === "json" || fileType === "jsonl") {
+    const elements: React.ReactNode[] = [];
+    let i = 0;
+    let key = 0;
+    
+    while (i < text.length) {
+      // String (key or value)
+      if (text[i] === '"') {
+        const start = i;
+        i++;
+        while (i < text.length && text[i] !== '"') {
+          if (text[i] === '\\') i++; // Skip escaped char
+          i++;
+        }
+        i++; // Include closing quote
+        const str = text.slice(start, i);
+        
+        // Check if this is a key (followed by colon)
+        const afterStr = text.slice(i).trimStart();
+        if (afterStr.startsWith(':')) {
+          elements.push(<span key={key++} className="text-sky-400">{str}</span>);
+        } else {
+          elements.push(<span key={key++} className="text-emerald-400">{str}</span>);
+        }
+        continue;
+      }
+      
+      // Numbers
+      if (/[-\d]/.test(text[i])) {
+        const start = i;
+        if (text[i] === '-') i++;
+        while (i < text.length && /[\d.eE+-]/.test(text[i])) i++;
+        const num = text.slice(start, i);
+        if (/^-?\d+\.?\d*([eE][+-]?\d+)?$/.test(num)) {
+          elements.push(<span key={key++} className="text-amber-400">{num}</span>);
+          continue;
+        }
+        // Not a valid number, backtrack
+        i = start;
+      }
+      
+      // Booleans and null
+      const remaining = text.slice(i);
+      const boolMatch = remaining.match(/^(true|false|null)/);
+      if (boolMatch) {
+        elements.push(<span key={key++} className="text-violet-400">{boolMatch[1]}</span>);
+        i += boolMatch[1].length;
+        continue;
+      }
+      
+      // Brackets and braces
+      if ('{}[]'.includes(text[i])) {
+        elements.push(<span key={key++} className="text-muted-foreground">{text[i]}</span>);
+        i++;
+        continue;
+      }
+      
+      // Colon and comma
+      if (':,'.includes(text[i])) {
+        elements.push(<span key={key++} className="text-muted-foreground">{text[i]}</span>);
+        i++;
+        continue;
+      }
+      
+      // Whitespace and other characters
+      elements.push(text[i]);
+      i++;
+    }
+    
+    return elements;
+  }
+  
+  // For CSV, highlight commas
+  if (fileType === "csv") {
+    return text.split(',').map((part, i, arr) => (
+      <span key={i}>
+        {part}
+        {i < arr.length - 1 && <span className="text-muted-foreground">,</span>}
+      </span>
+    ));
+  }
+  
+  return text;
 }
 
 function highlightMatches(text: string, query: string): React.ReactNode {

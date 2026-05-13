@@ -31,7 +31,7 @@ export function ColumnHeader({ column, stats }: ColumnHeaderProps) {
 
   return (
     <TooltipProvider delayDuration={100}>
-      <div className="min-w-[200px] flex-1 border-r border-border px-3 py-2">
+      <div className="min-w-[120px] flex-1 border-r border-border px-3 py-2">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-1">

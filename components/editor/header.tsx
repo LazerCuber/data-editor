@@ -65,12 +65,12 @@ export function Header({
           type="single"
           value={activeTab}
           onValueChange={(value) => value && onTabChange(value as "editor" | "projects")}
-          className="rounded-full bg-secondary p-1"
+          className="rounded-lg bg-secondary/50 p-0.5"
         >
           <ToggleGroupItem 
             value="editor" 
             aria-label="Editor" 
-            className="gap-1.5 px-3 rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            className="gap-1.5 px-3 py-1.5 rounded-md text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm"
           >
             <TableProperties className="h-4 w-4" />
             <span className="hidden sm:inline">Editor</span>
@@ -78,7 +78,7 @@ export function Header({
           <ToggleGroupItem 
             value="projects" 
             aria-label="Projects" 
-            className="gap-1.5 px-3 rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            className="gap-1.5 px-3 py-1.5 rounded-md text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm"
           >
             <Cloud className="h-4 w-4" />
             <span className="hidden sm:inline">Projects</span>
@@ -112,12 +112,12 @@ export function Header({
               type="single"
               value={viewMode}
               onValueChange={(value) => value && onViewModeChange(value as "table" | "raw")}
-              className="rounded-full bg-secondary p-1"
+              className="rounded-lg bg-secondary/50 p-0.5"
             >
               <ToggleGroupItem 
                 value="table" 
                 aria-label="Table view" 
-                className="gap-1.5 px-3 rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                className="gap-1.5 px-3 py-1.5 rounded-md text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm"
               >
                 <LayoutGrid className="h-4 w-4" />
                 <span className="hidden sm:inline">Table</span>
@@ -125,7 +125,7 @@ export function Header({
               <ToggleGroupItem 
                 value="raw" 
                 aria-label="Raw view" 
-                className="gap-1.5 px-3 rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                className="gap-1.5 px-3 py-1.5 rounded-md text-muted-foreground data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm"
               >
                 <FileCode className="h-4 w-4" />
                 <span className="hidden sm:inline">Raw</span>
